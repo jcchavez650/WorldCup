@@ -343,6 +343,7 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
+  width: 100%;
 }
 
 .bracket-team {
@@ -392,6 +393,127 @@
   font-style: italic;
   font-size: 11px;
 }
+
+/* Traditional two-sided bracket tree (fans in from both sides to the Final) */
+.bracket-tree {
+  display: flex;
+  gap: 24px;
+  align-items: stretch;
+  overflow-x: auto;
+  padding: 4px 8px 16px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.bk-col {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  min-width: 138px;
+  width: 138px;
+}
+
+.bk-col-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--gold);
+  text-align: center;
+  padding-bottom: 6px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.bk-col-label.third {
+  color: var(--text2);
+  border: none;
+  padding-bottom: 2px;
+  margin-bottom: 2px;
+}
+
+.bk-col-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.bk-center-body {
+  justify-content: center;
+  gap: 24px;
+}
+
+/* Each cell tiles its column edge-to-edge so connector geometry stays exact;
+   the card is vertically centered inside, creating the converging spacing. */
+.cell {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.bk-center-body .cell {
+  flex: 0 0 auto;
+}
+
+.bk-third {
+  display: flex;
+  flex-direction: column;
+}
+
+.bracket-matchup.final {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px rgba(255,199,44,0.25);
+}
+
+/* --- Connector lines --- */
+/* Horizontal stub out of every match toward the next (inner) round. */
+.bk-col.left .cell::after,
+.bk-col.right .cell::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 2px;
+  background: var(--border);
+}
+.bk-col.left .cell::after { right: -12px; }
+.bk-col.right .cell::after { left: -12px; }
+
+/* Horizontal stub into a receiving match from the previous round. */
+.bk-col.receives .cell::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 2px;
+  background: var(--border);
+}
+.bk-col.left.receives .cell::before { left: -12px; }
+.bk-col.right.receives .cell::before { right: -12px; }
+
+/* Vertical bar joining each pair of feeder matches at the round boundary. */
+.bk-join {
+  position: absolute;
+  top: 25%;
+  height: 50%;
+  width: 2px;
+  background: var(--border);
+}
+.bk-col.left .bk-join { left: -12px; }
+.bk-col.right .bk-join { right: -12px; }
+
+/* The Final receives a line from each side. */
+.bk-final-cell::before,
+.bk-final-cell::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 2px;
+  background: var(--border);
+}
+.bk-final-cell::before { left: -12px; }
+.bk-final-cell::after { right: -12px; }
 
 /* Loading */
 .loading {

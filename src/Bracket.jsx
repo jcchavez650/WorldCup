@@ -1,103 +1,139 @@
 import { roundKey } from './api.js'
 
-// WC 2026 has 48 teams → a 32-team knockout starting at the Round of 32,
-// plus a third-place play-off before the final.
-const ROUNDS = [
-  { key: 'r32', label: 'Round of 32', slots: 16 },
-  { key: 'r16', label: 'Round of 16', slots: 8 },
-  { key: 'qf', label: 'Quarter-finals', slots: 4 },
-  { key: 'sf', label: 'Semi-finals', slots: 2 },
-  { key: 'tp', label: 'Third-place Play-off', slots: 1 },
-  { key: 'f', label: 'Final', slots: 1 },
-]
+// WC 2026: 32-team knockout (Round of 32 → Final) plus a third-place play-off.
+// Total match slots per round, split evenly across the two sides of the tree.
+const ROUND_SLOTS = { r32: 16, r16: 8, qf: 4, sf: 2, tp: 1, f: 1 }
+
+// Split a round's matches into the left and right halves of the bracket,
+// padding with nulls (TBD) up to the full slot count so the tree keeps its
+// shape before results are in.
+function halves(byRound, key) {
+  const total = ROUND_SLOTS[key]
+  const played = byRound[key] ?? []
+  const padded = [
+    ...played,
+    ...Array.from({ length: Math.max(0, total - played.length) }, () => null),
+  ].slice(0, total)
+  const half = total / 2
+  return { left: padded.slice(0, half), right: padded.slice(half) }
+}
 
 export default function Bracket({ matches }) {
-  // Bucket every knockout match by its round.
   const byRound = {}
   for (const m of matches) {
     const r = roundKey(m)
     if (!r) continue
     ;(byRound[r] ??= []).push(m)
   }
-  for (const r of Object.keys(byRound)) {
-    byRound[r].sort((a, b) => a.date - b.date)
-  }
+  for (const r of Object.keys(byRound)) byRound[r].sort((a, b) => a.date - b.date)
 
-  const hasAny = Object.values(byRound).some(list => list.length)
+  const hasAny = ['r32', 'r16', 'qf', 'sf', 'tp', 'f'].some(k => byRound[k]?.length)
+
+  const r32 = halves(byRound, 'r32')
+  const r16 = halves(byRound, 'r16')
+  const qf = halves(byRound, 'qf')
+  const sf = halves(byRound, 'sf')
+  const final = (byRound.f ?? [])[0] ?? null
+  const third = (byRound.tp ?? [])[0] ?? null
 
   return (
     <div className="bracket-wrapper">
       {!hasAny && (
-        <div className="empty">
+        <div className="empty" style={{ marginBottom: 4 }}>
           <div className="e">🏆</div>
           <div>The knockout bracket fills in as results come in.</div>
           <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text2)' }}>
-            Round of 32 begins after the group stage. Slots below show the full
-            bracket structure.
+            Round of 32 begins after the group stage. Scroll sideways to see the
+            full bracket.
           </div>
         </div>
       )}
 
-      {ROUNDS.map(r => {
-        const played = byRound[r.key] ?? []
-        // Always render the round at its true size: real matchups first, then
-        // TBD placeholders to preserve the shape of the bracket.
-        const padded = played.length < r.slots
-          ? [...played, ...Array.from({ length: r.slots - played.length }, () => null)]
-          : played
+      <div className="bracket-tree">
+        {/* Left half — fans inward to the right */}
+        <Column label="R32" side="left" cells={r32.left} />
+        <Column label="R16" side="left" cells={r16.left} receives />
+        <Column label="QF" side="left" cells={qf.left} receives />
+        <Column label="SF" side="left" cells={sf.left} receives />
 
-        return (
-          <div className="bracket-round" key={r.key}>
-            <div className="round-label">{r.label}</div>
-            <div className={`bracket-grid ${r.slots === 1 ? 'single' : ''}`}>
-              {padded.map((m, i) =>
-                m ? <BracketMatchup key={m.id} match={m} /> : <TBDMatchup key={`tbd-${i}`} />
-              )}
+        {/* Center — the Final and third-place play-off */}
+        <div className="bk-col center">
+          <div className="bk-col-label">Final</div>
+          <div className="bk-col-body bk-center-body">
+            <div className="cell bk-final-cell">
+              <Matchup match={final} champion />
+            </div>
+            <div className="bk-third">
+              <div className="bk-col-label third">3rd Place</div>
+              <div className="cell">
+                <Matchup match={third} />
+              </div>
             </div>
           </div>
-        )
-      })}
+        </div>
+
+        {/* Right half — mirrors the left, fans inward to the left */}
+        <Column label="SF" side="right" cells={sf.right} receives />
+        <Column label="QF" side="right" cells={qf.right} receives />
+        <Column label="R16" side="right" cells={r16.right} receives />
+        <Column label="R32" side="right" cells={r32.right} />
+      </div>
     </div>
   )
 }
 
-function BracketMatchup({ match: m }) {
+function Column({ label, cells, side, receives = false }) {
+  return (
+    <div className={`bk-col ${side} ${receives ? 'receives' : ''}`}>
+      <div className="bk-col-label">{label}</div>
+      <div className="bk-col-body">
+        {cells.map((m, i) => (
+          <div className="cell" key={m?.id ?? `${label}-${i}`}>
+            <Matchup match={m} />
+            {receives && <span className="bk-join" />}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function Matchup({ match: m, champion = false }) {
+  if (!m) {
+    return (
+      <div className={`bracket-matchup ${champion ? 'final' : ''}`}>
+        <Team />
+        <Team />
+      </div>
+    )
+  }
   const hasScore = m.home.score !== null
   return (
-    <div className="bracket-matchup">
-      <div className={`bracket-team ${m.home.winner ? 'winner' : ''}`}>
-        <div className="bracket-team-info">
-          <span>{m.home.flag}</span>
-          <span>{m.home.team}</span>
-        </div>
-        {hasScore && <span className="bracket-team-score">{m.home.score}</span>}
-      </div>
-      <div className={`bracket-team ${m.away.winner ? 'winner' : ''}`}>
-        <div className="bracket-team-info">
-          <span>{m.away.flag}</span>
-          <span>{m.away.team}</span>
-        </div>
-        {hasScore && <span className="bracket-team-score">{m.away.score}</span>}
-      </div>
+    <div className={`bracket-matchup ${champion ? 'final' : ''}`}>
+      <Team team={m.home} score={hasScore ? m.home.score : null} />
+      <Team team={m.away} score={hasScore ? m.away.score : null} />
     </div>
   )
 }
 
-function TBDMatchup() {
+function Team({ team, score }) {
+  if (!team) {
+    return (
+      <div className="bracket-team">
+        <div className="bracket-team-info">
+          <span>🏳️</span>
+          <span className="tbd">TBD</span>
+        </div>
+      </div>
+    )
+  }
   return (
-    <div className="bracket-matchup">
-      <div className="bracket-team">
-        <div className="bracket-team-info">
-          <span>🏳️</span>
-          <span className="tbd">TBD</span>
-        </div>
+    <div className={`bracket-team ${team.winner ? 'winner' : ''}`}>
+      <div className="bracket-team-info">
+        <span>{team.flag}</span>
+        <span>{team.team}</span>
       </div>
-      <div className="bracket-team">
-        <div className="bracket-team-info">
-          <span>🏳️</span>
-          <span className="tbd">TBD</span>
-        </div>
-      </div>
+      {score !== null && <span className="bracket-team-score">{score}</span>}
     </div>
   )
 }
