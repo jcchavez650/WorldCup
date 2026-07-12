@@ -1,5 +1,5 @@
 import { MatchCard } from './Scores.jsx'
-import { roundKey } from './api.js'
+import { roundOf } from './api.js'
 
 const ROUND_LABELS = {
   r32: 'Round of 32',
@@ -19,7 +19,7 @@ const isDecided = m => known(m.home?.team) && known(m.away?.team)
 export default function Elimination({ matches }) {
   const byRound = {}
   for (const m of matches) {
-    const r = roundKey(m)
+    const r = roundOf(m)
     if (!r || !isDecided(m)) continue
     ;(byRound[r] ??= []).push(m)
   }

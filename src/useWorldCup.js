@@ -2,10 +2,9 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   fetchScoreboard,
   fetchStandings,
+  fetchKnockout,
   parseMatches,
   parseStandings,
-  mergeMatches,
-  TOURNAMENT_RANGE,
 } from './api.js'
 
 export function useWorldCup() {
@@ -23,19 +22,21 @@ export function useWorldCup() {
 
     try {
       // The default scoreboard is the freshest source for live/today games;
-      // the full-range fetch and standings are optional extras that shouldn't
-      // fail the whole load if ESPN doesn't return them.
-      const [scoreData, fullData, standData] = await Promise.all([
+      // the per-date knockout fetch (round-tagged) fills the bracket even on
+      // rest days; standings are optional and shouldn't fail the whole load.
+      const [scoreData, knockout, standData] = await Promise.all([
         fetchScoreboard(),
-        fetchScoreboard(TOURNAMENT_RANGE).catch(() => null),
+        fetchKnockout().catch(() => []),
         fetchStandings().catch(() => null),
       ])
 
-      let all = parseMatches(scoreData)
-      if (fullData) {
-        // Wider snapshot as the base, live scoreboard overrides for fresh scores.
-        all = mergeMatches(parseMatches(fullData), all)
-      }
+      // Knockout matches (with their round tags) take precedence; the default
+      // scoreboard adds group-stage / today's games not covered above.
+      const byId = new Map()
+      for (const m of knockout) byId.set(m.id, m)
+      for (const m of parseMatches(scoreData)) if (!byId.has(m.id)) byId.set(m.id, m)
+      const all = [...byId.values()].sort((a, b) => a.date - b.date)
+
       setMatches(all)
       if (standData) setGroups(parseStandings(standData))
       setLastUpdated(new Date())

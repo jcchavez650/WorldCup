@@ -1,40 +1,77 @@
-import { roundKey } from './api.js'
+import { roundOf, winnerName } from './api.js'
 
-// WC 2026: 32-team knockout (Round of 32 → Final) plus a third-place play-off.
-// Total match slots per round, split evenly across the two sides of the tree.
-const ROUND_SLOTS = { r32: 16, r16: 8, qf: 4, sf: 2, tp: 1, f: 1 }
+// Levels of the knockout tree, small index = closer to Round of 32.
+const R32 = 0, R16 = 1, QF = 2, SF = 3
 
-// Split a round's matches into the left and right halves of the bracket,
-// padding with nulls (TBD) up to the full slot count so the tree keeps its
-// shape before results are in.
-function halves(byRound, key) {
-  const total = ROUND_SLOTS[key]
-  const played = byRound[key] ?? []
-  const padded = [
-    ...played,
-    ...Array.from({ length: Math.max(0, total - played.length) }, () => null),
-  ].slice(0, total)
-  const half = total / 2
-  return { left: padded.slice(0, half), right: padded.slice(half) }
+// Pull the winner that fed into a parent slot out of a pool of feeder matches,
+// marking it used so the same match can't fill two slots.
+function takeFeeder(pool, teamName, used) {
+  if (!teamName || teamName === 'TBD') return null
+  const found = pool.find(m => !used.has(m.id) && winnerName(m) === teamName)
+  if (found) used.add(found.id)
+  return found ?? null
+}
+
+// Build a subtree rooted at `match` (at `level`) down to the Round of 32,
+// linking each child by which feeder match its participant won. Always returns
+// a full-depth node so the rendered bracket keeps its shape when data is missing.
+function buildNode(match, level, pools, used) {
+  if (level === R32) return { match, children: [] }
+  const pool = pools[level - 1]
+  let home = null, away = null
+  if (match) {
+    home = takeFeeder(pool, match.home?.team, used)
+    away = takeFeeder(pool, match.away?.team, used)
+  }
+  return {
+    match,
+    children: [
+      buildNode(home, level - 1, pools, used),
+      buildNode(away, level - 1, pools, used),
+    ],
+  }
+}
+
+// Matches at `target` level, top-to-bottom (in-order traversal of the subtree).
+function levelOrder(node, level, target) {
+  if (level === target) return [node.match]
+  return [
+    ...levelOrder(node.children[0], level - 1, target),
+    ...levelOrder(node.children[1], level - 1, target),
+  ]
 }
 
 export default function Bracket({ matches }) {
   const byRound = {}
   for (const m of matches) {
-    const r = roundKey(m)
+    const r = roundOf(m)
     if (!r) continue
     ;(byRound[r] ??= []).push(m)
   }
   for (const r of Object.keys(byRound)) byRound[r].sort((a, b) => a.date - b.date)
 
   const hasAny = ['r32', 'r16', 'qf', 'sf', 'tp', 'f'].some(k => byRound[k]?.length)
-
-  const r32 = halves(byRound, 'r32')
-  const r16 = halves(byRound, 'r16')
-  const qf = halves(byRound, 'qf')
-  const sf = halves(byRound, 'sf')
-  const final = (byRound.f ?? [])[0] ?? null
+  const pools = { [R32]: byRound.r32 ?? [], [R16]: byRound.r16 ?? [], [QF]: byRound.qf ?? [] }
+  const sfList = byRound.sf ?? []
+  const finalM = (byRound.f ?? [])[0] ?? null
   const third = (byRound.tp ?? [])[0] ?? null
+
+  // Anchor each half of the bracket on a semi-final and reconstruct downward.
+  // Order the two SFs so the left half feeds the Final's home side when known.
+  let leftSf = sfList[0] ?? null, rightSf = sfList[1] ?? null
+  if (finalM && sfList.length === 2) {
+    const feedsHome = sfList.find(s => {
+      const w = winnerName(s)
+      return w && (w === finalM.home?.team || w === finalM.away?.team)
+        ? w === finalM.home?.team
+        : s.home?.team === finalM.home?.team || s.away?.team === finalM.home?.team
+    })
+    if (feedsHome) { leftSf = feedsHome; rightSf = sfList.find(s => s !== feedsHome) ?? null }
+  }
+
+  const used = new Set()
+  const left = buildNode(leftSf, SF, pools, used)
+  const right = buildNode(rightSf, SF, pools, used)
 
   return (
     <div className="bracket-wrapper">
@@ -43,25 +80,22 @@ export default function Bracket({ matches }) {
           <div className="e">🏆</div>
           <div>The knockout bracket fills in as results come in.</div>
           <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text2)' }}>
-            Round of 32 begins after the group stage. Scroll sideways to see the
-            full bracket.
+            Scroll sideways to see the full bracket.
           </div>
         </div>
       )}
 
       <div className="bracket-tree">
-        {/* Left half — fans inward to the right */}
-        <Column label="R32" side="left" cells={r32.left} />
-        <Column label="R16" side="left" cells={r16.left} receives />
-        <Column label="QF" side="left" cells={qf.left} receives />
-        <Column label="SF" side="left" cells={sf.left} receives />
+        <Column label="R32" side="left" cells={levelOrder(left, SF, R32)} />
+        <Column label="R16" side="left" cells={levelOrder(left, SF, R16)} receives />
+        <Column label="QF" side="left" cells={levelOrder(left, SF, QF)} receives />
+        <Column label="SF" side="left" cells={[leftSf]} receives />
 
-        {/* Center — the Final and third-place play-off */}
         <div className="bk-col center">
           <div className="bk-col-label">Final</div>
           <div className="bk-col-body bk-center-body">
             <div className="cell bk-final-cell">
-              <Matchup match={final} champion />
+              <Matchup match={finalM} champion />
             </div>
             <div className="bk-third">
               <div className="bk-col-label third">3rd Place</div>
@@ -72,11 +106,10 @@ export default function Bracket({ matches }) {
           </div>
         </div>
 
-        {/* Right half — mirrors the left, fans inward to the left */}
-        <Column label="SF" side="right" cells={sf.right} receives />
-        <Column label="QF" side="right" cells={qf.right} receives />
-        <Column label="R16" side="right" cells={r16.right} receives />
-        <Column label="R32" side="right" cells={r32.right} />
+        <Column label="SF" side="right" cells={[rightSf]} receives />
+        <Column label="QF" side="right" cells={levelOrder(right, SF, QF)} receives />
+        <Column label="R16" side="right" cells={levelOrder(right, SF, R16)} receives />
+        <Column label="R32" side="right" cells={levelOrder(right, SF, R32)} />
       </div>
     </div>
   )
@@ -99,17 +132,13 @@ function Column({ label, cells, side, receives = false }) {
 }
 
 function Matchup({ match: m, champion = false }) {
+  const cls = `bracket-matchup ${champion ? 'final' : ''}`
   if (!m) {
-    return (
-      <div className={`bracket-matchup ${champion ? 'final' : ''}`}>
-        <Team />
-        <Team />
-      </div>
-    )
+    return <div className={cls}><Team /><Team /></div>
   }
   const hasScore = m.home.score !== null
   return (
-    <div className={`bracket-matchup ${champion ? 'final' : ''}`}>
+    <div className={cls}>
       <Team team={m.home} score={hasScore ? m.home.score : null} />
       <Team team={m.away} score={hasScore ? m.away.score : null} />
     </div>

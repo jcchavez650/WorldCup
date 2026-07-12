@@ -25,6 +25,43 @@ export async function fetchStandings() {
 // populated regardless of what "today" is.
 export const TOURNAMENT_RANGE = '20260611-20260719'
 
+// Official WC 2026 knockout schedule (YYYYMMDD per round). ESPN's default
+// scoreboard only returns matches near "today", and its multi-day range param
+// is unreliable for soccer — so we fetch each knockout date explicitly and
+// tag the round by the date it was played on.
+export const KNOCKOUT_DATES = {
+  r32: ['20260628', '20260629', '20260630', '20260701', '20260702', '20260703'],
+  r16: ['20260704', '20260705', '20260706', '20260707'],
+  qf: ['20260709', '20260710', '20260711'],
+  sf: ['20260714', '20260715'],
+  tp: ['20260718'],
+  f: ['20260719'],
+}
+
+// Fetch the whole knockout stage date-by-date and tag each match with its
+// round. Individual dates that fail (or have no games yet) resolve to [].
+export async function fetchKnockout() {
+  const jobs = []
+  for (const [round, dates] of Object.entries(KNOCKOUT_DATES)) {
+    for (const d of dates) {
+      jobs.push(
+        fetchScoreboard(d)
+          .then(data => parseMatches(data).map(m => ({ ...m, round })))
+          .catch(() => [])
+      )
+    }
+  }
+  const lists = await Promise.all(jobs)
+  const byId = new Map()
+  for (const m of lists.flat()) if (!byId.has(m.id)) byId.set(m.id, m)
+  return [...byId.values()]
+}
+
+// Round of a match: prefer the date-derived tag, fall back to text detection.
+export function roundOf(match) {
+  return match?.round ?? roundKey(match)
+}
+
 // Map a match to a knockout round key, or null for group-stage / unknown.
 // Reads every text field ESPN might carry the round in (event name, the
 // competition note headline, the season slug).
@@ -37,6 +74,19 @@ export function roundKey(match) {
   // Check third place before "final" — its label often contains "place final".
   if (t.includes('third place') || t.includes('3rd place') || t.includes('third-place')) return 'tp'
   if (t.includes('final')) return 'f'
+  return null
+}
+
+// The winning team's name for a decided match, or null if undecided/unknown.
+export function winnerName(m) {
+  if (!m) return null
+  if (m.home?.winner) return m.home.team
+  if (m.away?.winner) return m.away.team
+  const hs = Number(m.home?.score), as = Number(m.away?.score)
+  if (m.home?.score != null && m.away?.score != null && !Number.isNaN(hs) && !Number.isNaN(as)) {
+    if (hs > as) return m.home.team
+    if (as > hs) return m.away.team
+  }
   return null
 }
 
