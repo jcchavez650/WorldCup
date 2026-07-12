@@ -117,12 +117,14 @@ function Matchup({ match: m, champion = false }) {
 }
 
 function Team({ team, score }) {
-  if (!team) {
+  // Undecided slot — either no competitor object, or ESPN returned a
+  // placeholder whose name is empty/"TBD". Keep the bracket's shape but render
+  // it quietly instead of a loud "🏳️ TBD".
+  if (!team || !team.team || team.team === 'TBD') {
     return (
-      <div className="bracket-team">
+      <div className="bracket-team empty">
         <div className="bracket-team-info">
-          <span>🏳️</span>
-          <span className="tbd">TBD</span>
+          <span className="tbd-slot">–</span>
         </div>
       </div>
     )

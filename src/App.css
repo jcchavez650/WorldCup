@@ -394,6 +394,16 @@
   font-size: 11px;
 }
 
+.bracket-team.empty {
+  opacity: 0.55;
+}
+
+.tbd-slot {
+  color: var(--text2);
+  font-size: 12px;
+  padding-left: 2px;
+}
+
 /* Traditional two-sided bracket tree (fans in from both sides to the Final) */
 .bracket-tree {
   display: flex;
