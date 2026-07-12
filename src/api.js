@@ -2,10 +2,10 @@
 const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world'
 const ESPN_V2 = 'https://site.api.espn.com/apis/v2/sports/soccer/fifa.world'
 
-const CORS = 'https://corsproxy.io/?url='
-
+// ESPN's public endpoints send `Access-Control-Allow-Origin: *`, so we can
+// fetch them directly from the browser without a third-party CORS proxy.
 async function get(url) {
-  const res = await fetch(CORS + encodeURIComponent(url))
+  const res = await fetch(url)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
