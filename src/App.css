@@ -398,6 +398,18 @@
   opacity: 0.55;
 }
 
+.bk-matchup-time {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: var(--text2);
+  text-align: center;
+  padding: 3px 4px;
+  background: rgba(255,255,255,0.03);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
 .tbd-slot {
   color: var(--text2);
   font-size: 12px;

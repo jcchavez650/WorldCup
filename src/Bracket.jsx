@@ -131,14 +131,29 @@ function Column({ label, cells, side, receives = false }) {
   )
 }
 
+// Match kickoff formatted in US Pacific time, e.g. "Jul 14 · 3:00 PM PT".
+function formatPT(date) {
+  if (!date || Number.isNaN(date.getTime())) return null
+  const s = date.toLocaleString('en-US', {
+    timeZone: 'America/Los_Angeles',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+  return `${s.replace(', ', ' · ')} PT`
+}
+
 function Matchup({ match: m, champion = false }) {
   const cls = `bracket-matchup ${champion ? 'final' : ''}`
   if (!m) {
     return <div className={cls}><Team /><Team /></div>
   }
   const hasScore = m.home.score !== null
+  const when = formatPT(m.date)
   return (
     <div className={cls}>
+      {when && <div className="bk-matchup-time">{when}</div>}
       <Team team={m.home} score={hasScore ? m.home.score : null} />
       <Team team={m.away} score={hasScore ? m.away.score : null} />
     </div>
