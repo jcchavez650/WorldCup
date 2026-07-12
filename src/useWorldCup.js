@@ -7,6 +7,11 @@ import {
   parseStandings,
 } from './api.js'
 
+// Format a Date as ESPN's YYYYMMDD date param.
+function ymd(d) {
+  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
+}
+
 export function useWorldCup() {
   const [matches, setMatches] = useState([])
   const [groups, setGroups] = useState([])
@@ -21,20 +26,29 @@ export function useWorldCup() {
     setError(null)
 
     try {
-      // The default scoreboard is the freshest source for live/today games;
-      // the per-date knockout fetch (round-tagged) fills the bracket even on
-      // rest days; standings are optional and shouldn't fail the whole load.
-      const [scoreData, knockout, standData] = await Promise.all([
+      // Fetch the default scoreboard plus today's and tomorrow's dates
+      // explicitly so the Scores tab always has today + next-day games; the
+      // per-date knockout fetch (round-tagged) fills the bracket even on rest
+      // days; standings are optional and shouldn't fail the whole load.
+      const now = new Date()
+      const tomorrow = new Date(now)
+      tomorrow.setDate(now.getDate() + 1)
+
+      const [scoreData, todayData, tomorrowData, knockout, standData] = await Promise.all([
         fetchScoreboard(),
+        fetchScoreboard(ymd(now)).catch(() => null),
+        fetchScoreboard(ymd(tomorrow)).catch(() => null),
         fetchKnockout().catch(() => []),
         fetchStandings().catch(() => null),
       ])
 
-      // Knockout matches (with their round tags) take precedence; the default
-      // scoreboard adds group-stage / today's games not covered above.
+      // Knockout matches (with their round tags) take precedence; the
+      // scoreboard fetches add group-stage / today / tomorrow games.
       const byId = new Map()
       for (const m of knockout) byId.set(m.id, m)
-      for (const m of parseMatches(scoreData)) if (!byId.has(m.id)) byId.set(m.id, m)
+      for (const data of [scoreData, todayData, tomorrowData]) {
+        for (const m of parseMatches(data)) if (!byId.has(m.id)) byId.set(m.id, m)
+      }
       const all = [...byId.values()].sort((a, b) => a.date - b.date)
 
       setMatches(all)

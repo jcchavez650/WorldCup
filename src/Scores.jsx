@@ -8,26 +8,36 @@ export default function Scores({ matches }) {
     )
   }
 
-  const live = matches.filter(m => m.statusType === 'STATUS_IN_PROGRESS')
-  const today = matches.filter(m => {
-    const now = new Date()
-    const d = m.date
-    return (
-      m.statusType !== 'STATUS_IN_PROGRESS' &&
-      d.getFullYear() === now.getFullYear() &&
-      d.getMonth() === now.getMonth() &&
-      d.getDate() === now.getDate()
-    )
-  })
-  const other = matches.filter(m =>
-    m.statusType !== 'STATUS_IN_PROGRESS' &&
-    !today.includes(m)
-  )
+  const now = new Date()
+  const tomorrow = new Date(now)
+  tomorrow.setDate(now.getDate() + 1)
+  const sameDay = (d, ref) =>
+    d.getFullYear() === ref.getFullYear() &&
+    d.getMonth() === ref.getMonth() &&
+    d.getDate() === ref.getDate()
+  const byTime = (a, b) => a.date - b.date
+
+  const live = matches.filter(m => m.statusType === 'STATUS_IN_PROGRESS').sort(byTime)
+  const todayGames = matches
+    .filter(m => m.statusType !== 'STATUS_IN_PROGRESS' && sameDay(m.date, now))
+    .sort(byTime)
+  const tomorrowGames = matches
+    .filter(m => m.statusType !== 'STATUS_IN_PROGRESS' && sameDay(m.date, tomorrow))
+    .sort(byTime)
 
   const sections = []
   if (live.length) sections.push({ label: '🔴 Live Now', games: live })
-  if (today.length) sections.push({ label: "Today's Matches", games: today })
-  if (other.length) sections.push({ label: 'Schedule', games: other.slice(0, 30) })
+  if (todayGames.length) sections.push({ label: "Today's Matches", games: todayGames })
+  if (tomorrowGames.length) sections.push({ label: 'Tomorrow', games: tomorrowGames })
+
+  if (!sections.length) {
+    return (
+      <div className="empty">
+        <div className="e">⚽</div>
+        No matches today or tomorrow. Check back soon!
+      </div>
+    )
+  }
 
   return (
     <div>
