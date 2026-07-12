@@ -1,5 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
-import { fetchScoreboard, fetchStandings, parseMatches, parseStandings } from './api.js'
+import {
+  fetchScoreboard,
+  fetchStandings,
+  parseMatches,
+  parseStandings,
+  mergeMatches,
+  TOURNAMENT_RANGE,
+} from './api.js'
 
 export function useWorldCup() {
   const [matches, setMatches] = useState([])
@@ -15,12 +22,22 @@ export function useWorldCup() {
     setError(null)
 
     try {
-      const [scoreData, standData] = await Promise.all([
+      // The default scoreboard is the freshest source for live/today games;
+      // the full-range fetch and standings are optional extras that shouldn't
+      // fail the whole load if ESPN doesn't return them.
+      const [scoreData, fullData, standData] = await Promise.all([
         fetchScoreboard(),
-        fetchStandings(),
+        fetchScoreboard(TOURNAMENT_RANGE).catch(() => null),
+        fetchStandings().catch(() => null),
       ])
-      setMatches(parseMatches(scoreData))
-      setGroups(parseStandings(standData))
+
+      let all = parseMatches(scoreData)
+      if (fullData) {
+        // Wider snapshot as the base, live scoreboard overrides for fresh scores.
+        all = mergeMatches(parseMatches(fullData), all)
+      }
+      setMatches(all)
+      if (standData) setGroups(parseStandings(standData))
       setLastUpdated(new Date())
     } catch (e) {
       setError(e.message)

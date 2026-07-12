@@ -4,11 +4,13 @@ import { useWorldCup } from './useWorldCup.js'
 import Scores from './Scores.jsx'
 import Groups from './Groups.jsx'
 import Bracket from './Bracket.jsx'
+import Elimination from './Elimination.jsx'
 
 const TABS = [
   { id: 'scores', label: 'Scores', icon: '⚽' },
   { id: 'groups', label: 'Groups', icon: '📊' },
   { id: 'bracket', label: 'Bracket', icon: '🏆' },
+  { id: 'elimination', label: 'Elimination', icon: '🥊' },
 ]
 
 export default function App() {
@@ -86,6 +88,7 @@ export default function App() {
             {tab === 'scores' && <Scores matches={matches} />}
             {tab === 'groups' && <Groups groups={groups} />}
             {tab === 'bracket' && <Bracket matches={matches} />}
+            {tab === 'elimination' && <Elimination matches={matches} />}
           </>
         )}
       </main>

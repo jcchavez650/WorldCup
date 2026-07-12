@@ -10,12 +10,43 @@ async function get(url) {
   return res.json()
 }
 
-export async function fetchScoreboard() {
-  return get(`${ESPN_BASE}/scoreboard`)
+// Pass `dates` (e.g. '20260611-20260719') to fetch a whole date range instead
+// of just the default matchday window around today.
+export async function fetchScoreboard(dates) {
+  const q = dates ? `?dates=${dates}` : ''
+  return get(`${ESPN_BASE}/scoreboard${q}`)
 }
 
 export async function fetchStandings() {
   return get(`${ESPN_V2}/standings`)
+}
+
+// Full WC 2026 window so the schedule, bracket and elimination views are
+// populated regardless of what "today" is.
+export const TOURNAMENT_RANGE = '20260611-20260719'
+
+// Map a match to a knockout round key, or null for group-stage / unknown.
+// Reads every text field ESPN might carry the round in (event name, the
+// competition note headline, the season slug).
+export function roundKey(match) {
+  const t = `${match?.name ?? ''} ${match?.note ?? ''} ${match?.group ?? ''}`.toLowerCase()
+  if (t.includes('round of 32')) return 'r32'
+  if (t.includes('round of 16')) return 'r16'
+  if (t.includes('quarter')) return 'qf'
+  if (t.includes('semi')) return 'sf'
+  // Check third place before "final" — its label often contains "place final".
+  if (t.includes('third place') || t.includes('3rd place') || t.includes('third-place')) return 'tp'
+  if (t.includes('final')) return 'f'
+  return null
+}
+
+// Merge two match lists by id. Entries in `fresher` win over `base` (used to
+// let the live scoreboard override the wider date-range snapshot).
+export function mergeMatches(base, fresher) {
+  const byId = new Map()
+  for (const m of base) byId.set(m.id, m)
+  for (const m of fresher) byId.set(m.id, m)
+  return [...byId.values()].sort((a, b) => a.date - b.date)
 }
 
 // Parse scoreboard into structured matches
@@ -31,6 +62,7 @@ export function parseMatches(data) {
       id: event.id,
       date: new Date(event.date),
       name: event.name,
+      note: comp.notes?.[0]?.headline ?? '',
       group: event.season?.slug ?? '',
       venue: comp.venue?.fullName ?? '',
       statusType: status.type?.name ?? '',

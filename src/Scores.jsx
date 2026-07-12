@@ -41,7 +41,7 @@ export default function Scores({ matches }) {
   )
 }
 
-function MatchCard({ match: m }) {
+export function MatchCard({ match: m }) {
   const isLive = m.statusType === 'STATUS_IN_PROGRESS'
   const isFinal = m.statusType === 'STATUS_FINAL' || m.statusType === 'STATUS_FULL_TIME'
   const hasScore = m.home.score !== null
