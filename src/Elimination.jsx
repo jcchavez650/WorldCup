@@ -11,11 +11,16 @@ const ROUND_LABELS = {
 }
 const ORDER = ['r32', 'r16', 'qf', 'sf', 'tp', 'f']
 
+// A team slot is only "real" once it's been decided — undecided knockout
+// fixtures come back from ESPN with placeholder (TBD) competitors.
+const known = t => t && t !== 'TBD'
+const isDecided = m => known(m.home?.team) && known(m.away?.team)
+
 export default function Elimination({ matches }) {
   const byRound = {}
   for (const m of matches) {
     const r = roundKey(m)
-    if (!r) continue
+    if (!r || !isDecided(m)) continue
     ;(byRound[r] ??= []).push(m)
   }
 
